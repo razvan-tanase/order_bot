@@ -27,24 +27,24 @@ def open_order():
         contract=contract,
         function_name="openOrder",
         caller=owner,
-        call_arguments=[USDC_IDENTIFIER, EGLD_VALUE, EGLD_MIN_VALUE],
+        call_arguments=[USDC_IDENTIFIER, LIMIT, MIN_VALUE],
         gas_limit=10000000,
         esdt_transfers=transfers,
-        nonce=235
+        nonce=324
     )
 
     build_and_sign_order(builder)
 
 
-def execute_order(index):
+def execute_order(index: int, nonce: int):
     builder = ContractCallBuilder(
         config,
         contract=contract,
         function_name="executeOrder",
         caller=owner,
         call_arguments=[index, pool_address],
-        gas_limit=555000000,
-        nonce=236
+        gas_limit=600000000,
+        nonce=nonce
     )
 
     build_and_sign_order(builder)

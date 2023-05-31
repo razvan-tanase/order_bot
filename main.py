@@ -1,22 +1,26 @@
+import sched
+import sys
+import time
 from argparse import ArgumentParser
 from typing import List
 
 import requests
 from multiversx_sdk_core import Address
 
-from API import execute_order
+from API import execute_order, get_orders, open_order
 from utils import *
 
 
 def parse_arguments(cli_args: List[str]):
     parser = ArgumentParser()
     parser.add_argument("--address", required=True, type=str, help="Your wallet address")
+    parser.add_argument("--pem", required=True, type=str, help="Path to your pem file")
     args = parser.parse_args(cli_args)
 
     return args
 
 
-def decode_order(value):
+def decode_order(value) -> Order:
     # Extracting the hex value of the owner address
     hex_address = value[:32].hex()
 
@@ -65,62 +69,44 @@ def decode_order(value):
         byteorder='big'
     )
 
-    return Order(owner_address, token_in, amount_in, token_out, limit, minimum_amount)
+    return Order(owner_address, token_in, amount_in, token_out, limit * (10 ** -18), minimum_amount)
 
 
 def request_price():
     url = "https://devnet-api.multiversx.com/mex/tokens"
     response = requests.request("GET", url)
 
-    return round(response.json()[1]['price'], 3)
+    egld_map = response.json()[1]
+
+    return round(egld_map["price"], 3)
 
 
-def check_price(orders: list[Order], sc):
+def check_price(orders: list[Order], nonce: int, sc):
     current_price = request_price()
 
-    for order in orders:
+    for index, order in enumerate(orders):
         if current_price >= order.limit:
-            execute_order(order)
+            execute_order(index, nonce)
+            nonce += 1
+            print(f'Order {index} executed')
             return
 
     print(f'Current Price of WEGLD is {current_price}')
 
-    sc.enter(6, 1, check_price, (orders, sc,))
+    sc.enter(6, 1, check_price, (orders, nonce, sc,))
 
 
 def main(cli_args: List[str]):
     # args = parse_arguments(cli_args)
-    # open_order()
-    # orders = get_orders()
-    #
-    # map(decode_order, orders)
-    #
-    # s = sched.scheduler(time.time, time.sleep)
-    # s.enter(0, 1, check_price, (orders, s,))
-    # s.run()
+    orders = list(map(decode_order, get_orders()))
+    print(orders[1])
 
-    execute_order(1)
+    s = sched.scheduler(time.time, time.sleep)
+    s.enter(0, 1, check_price, (orders, 318, s,))
+    s.run()
 
 
 if __name__ == '__main__':
-    # main(sys.argv[1:])
+    main(sys.argv[1:])
 
     # open_order()
-    execute_order(2)
-
-    # Example usage
-    # value = b'\x00\x00\x00\x0cWEGLD-d7c6bb\x00\x00\x00\x08\x1b\xc1mgN\xc8\x00\x00'
-    # value = \
-    #     b'#\xc9\xe8\xc5\xa8\x7f"\xf5\xc0\xbeV\xcflu\xe9\xb5N\xa1`C\xf9\nz\xcf\x90U J\xc5\xdbUR' \
-    #     b'\x00\x00\x00\x0cWEGLD-d7c6bb\x00\x00\x00\x08\x1b\xc1mgN\xc8\x00\x00' \
-    #     b'\x00\x00\x00\x0bUSDC-8d4068\x00\x00\x00\x03z\x12\x00'
-    # result = decode_order(value)
-    # print(result)
-
-    # value = b'#\xc9\xe8\xc5\xa8\x7f"\xf5\xc0\xbeV\xcflu\xe9\xb5N\xa1`C\xf9\nz\xcf\x90U J\xc5\xdbUR' \
-    #         b'\x00\x00\x00\x0cWEGLD-d7c6bb\x00\x00\x00\x08\x1b\xc1mgN\xc8\x00\x00' \
-    #         b'\x00\x00\x00\x0bUSDC-8d4068\x00\x00\x00\x01%' \
-    #         b'\x00\x00\x00\x04\x08v\xbf\x80'
-    #
-    # order = decode_order(value)
-    # print(order)
