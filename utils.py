@@ -7,9 +7,9 @@ WEGLD_USDC_LIQUIDITY_POOL = "erd1qqqqqqqqqqqqqpgqq67uv84ma3cekpa55l4l68ajzhq8qm3
 WEGLD_IDENTIFIER = "WEGLD-d7c6bb"
 USDC_IDENTIFIER = "USDC-8d4068"
 
-EGLD_AMOUNT = 2
-LIMIT = int('{:.0f}'.format(32.86 * 10 ** 18))
-EGLD_VALUE = 32.81
+EGLD_AMOUNT = 1
+EGLD_VALUE = 32.595
+LIMIT = int('{:.0f}'.format(EGLD_VALUE * 10 ** 18))
 MIN_VALUE = int(EGLD_AMOUNT * EGLD_VALUE * 0.98703 * 10 ** 6)
 
 
@@ -27,4 +27,12 @@ class Order:
             self.owner, self.token_in, self.amount_in, self.token_out, self.limit, self.amount_out_min)
 
 
+def swap_remove(items: list, index: int):
+    if index < 0 or index >= len(items):
+        raise IndexError("Index out of range")
+
+    if index != len(items) - 1:
+        items[index] = items[-1]
+
+    items.pop()
 

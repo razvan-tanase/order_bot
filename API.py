@@ -30,7 +30,7 @@ def open_order():
         call_arguments=[USDC_IDENTIFIER, LIMIT, MIN_VALUE],
         gas_limit=10000000,
         esdt_transfers=transfers,
-        nonce=324
+        nonce=354
     )
 
     build_and_sign_order(builder)
