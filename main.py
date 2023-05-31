@@ -1,24 +1,11 @@
-import sched
-import sys
-import time
 from argparse import ArgumentParser
-from pathlib import Path
 from typing import List
 
 import requests
-from multiversx_sdk_core import ContractQueryBuilder, Address, TokenPayment
-from multiversx_sdk_core.interfaces import IAddress
-from multiversx_sdk_core.transaction_builders import DefaultTransactionBuildersConfiguration, \
-    ContractCallBuilder
-from multiversx_sdk_network_providers import ApiNetworkProvider
-from multiversx_sdk_wallet import UserSigner
+from multiversx_sdk_core import Address
 
+from API import execute_order
 from utils import *
-
-contract: IAddress = Address.from_bech32(CONTRACT_ADDRESS)
-owner: Address = Address.from_bech32(OWNER_ADDRESS)
-
-config = DefaultTransactionBuildersConfiguration(chain_id="D")
 
 
 def parse_arguments(cli_args: List[str]):
@@ -27,31 +14,6 @@ def parse_arguments(cli_args: List[str]):
     args = parser.parse_args(cli_args)
 
     return args
-
-
-def get_orders():
-    # contract: IAddress = Address.from_bech32(CONTRACT_ADDRESS)
-    # owner: Address = Address.from_bech32(args.address)
-
-    builder = ContractQueryBuilder(
-        contract=contract,
-        function=STORAGE_FUNCTION,
-        call_arguments=[],
-        caller=owner
-    )
-
-    query = builder.build()
-
-    network_provider = ApiNetworkProvider(API_URL)
-    response = network_provider.query_contract(query)
-
-    print("Return code:", response.return_code)
-    print("Return data:", response.return_data)
-    print("Return message:", response.return_message)
-    print("Return data parts:", response.get_return_data_parts())
-    print("Return data as dictionary:", response.to_dictionary())
-
-    return response.get_return_data_parts()
 
 
 def decode_order(value):
@@ -106,50 +68,6 @@ def decode_order(value):
     return Order(owner_address, token_in, amount_in, token_out, limit, minimum_amount)
 
 
-def open_order():
-    transfers = [
-        TokenPayment.fungible_from_amount(WEGLD_IDENTIFIER, EGLD_AMOUNT, 18)
-    ]
-
-    signer = UserSigner.from_pem_file(Path("wallet-owner.pem"))
-
-    builder = ContractCallBuilder(
-        config,
-        contract=contract,
-        function_name="openOrder",
-        caller=owner,
-        call_arguments=[USDC_IDENTIFIER, EGLD_VALUE, EGLD_AMOUNT * EGLD_MIN_VALUE * 10 ** 6],
-        gas_limit=10000000,
-        esdt_transfers=transfers,
-        nonce=231
-    )
-
-    tx = builder.build()
-    tx.signature = signer.sign(tx)
-
-    print("Transaction:", tx.to_dictionary())
-    print("Transaction data:", tx.data)
-
-    network_provider = ApiNetworkProvider("https://devnet-api.multiversx.com")
-    response = network_provider.send_transaction(tx)
-    print("Response:", response)
-
-
-def execute_order(index):
-    builder = ContractCallBuilder(
-        config,
-        contract=contract,
-        function_name="executeOrder",
-        caller=owner,
-        call_arguments=[index, WEGLD_USDC_LIQUIDITY_POOL],
-        gas_limit=10000000
-    )
-
-    tx = builder.build()
-    print("Transaction:", tx.to_dictionary())
-    print("Transaction data:", tx.data)
-
-
 def request_price():
     url = "https://devnet-api.multiversx.com/mex/tokens"
     response = requests.request("GET", url)
@@ -173,17 +91,22 @@ def check_price(orders: list[Order], sc):
 def main(cli_args: List[str]):
     # args = parse_arguments(cli_args)
     # open_order()
-    orders = get_orders()
+    # orders = get_orders()
+    #
+    # map(decode_order, orders)
+    #
+    # s = sched.scheduler(time.time, time.sleep)
+    # s.enter(0, 1, check_price, (orders, s,))
+    # s.run()
 
-    map(decode_order, orders)
-
-    s = sched.scheduler(time.time, time.sleep)
-    s.enter(0, 1, check_price, (orders, s,))
-    s.run()
+    execute_order(1)
 
 
 if __name__ == '__main__':
     # main(sys.argv[1:])
+
+    # open_order()
+    execute_order(2)
 
     # Example usage
     # value = b'\x00\x00\x00\x0cWEGLD-d7c6bb\x00\x00\x00\x08\x1b\xc1mgN\xc8\x00\x00'
@@ -194,10 +117,10 @@ if __name__ == '__main__':
     # result = decode_order(value)
     # print(result)
 
-    value = b'#\xc9\xe8\xc5\xa8\x7f"\xf5\xc0\xbeV\xcflu\xe9\xb5N\xa1`C\xf9\nz\xcf\x90U J\xc5\xdbUR' \
-            b'\x00\x00\x00\x0cWEGLD-d7c6bb\x00\x00\x00\x08\x1b\xc1mgN\xc8\x00\x00' \
-            b'\x00\x00\x00\x0bUSDC-8d4068\x00\x00\x00\x01%' \
-            b'\x00\x00\x00\x04\x08v\xbf\x80'
-
-    order = decode_order(value)
-    print(order)
+    # value = b'#\xc9\xe8\xc5\xa8\x7f"\xf5\xc0\xbeV\xcflu\xe9\xb5N\xa1`C\xf9\nz\xcf\x90U J\xc5\xdbUR' \
+    #         b'\x00\x00\x00\x0cWEGLD-d7c6bb\x00\x00\x00\x08\x1b\xc1mgN\xc8\x00\x00' \
+    #         b'\x00\x00\x00\x0bUSDC-8d4068\x00\x00\x00\x01%' \
+    #         b'\x00\x00\x00\x04\x08v\xbf\x80'
+    #
+    # order = decode_order(value)
+    # print(order)

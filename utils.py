@@ -8,8 +8,8 @@ WEGLD_IDENTIFIER = "WEGLD-d7c6bb"
 USDC_IDENTIFIER = "USDC-8d4068"
 
 EGLD_AMOUNT = 2
-EGLD_VALUE = 37
-EGLD_MIN_VALUE = 71
+EGLD_VALUE = 33
+EGLD_MIN_VALUE = int(EGLD_AMOUNT * EGLD_VALUE * 0.98703 * 10 ** 6)
 
 
 class Order:
@@ -24,5 +24,6 @@ class Order:
     def __str__(self):
         return "Order: owner: {}, token_in: {}, amount_in: {}, token_out: {}, limit: {}, amount_out_min: {}".format(
             self.owner, self.token_in, self.amount_in, self.token_out, self.limit, self.amount_out_min)
+
 
 
