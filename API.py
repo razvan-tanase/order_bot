@@ -30,7 +30,7 @@ def open_order():
         call_arguments=[USDC_IDENTIFIER, LIMIT, MIN_VALUE],
         gas_limit=10000000,
         esdt_transfers=transfers,
-        nonce=354
+        nonce=361
     )
 
     build_and_sign_order(builder)
@@ -63,12 +63,6 @@ def get_orders():
     network_provider = ApiNetworkProvider(API_URL)
     response = network_provider.query_contract(query)
 
-    print("Return code:", response.return_code)
-    print("Return data:", response.return_data)
-    print("Return message:", response.return_message)
-    print("Return data parts:", response.get_return_data_parts())
-    print("Return data as dictionary:", response.to_dictionary())
-
     return response.get_return_data_parts()
 
 
@@ -79,6 +73,6 @@ def build_and_sign_order(builder: ContractCallBuilder):
     print("Transaction:", tx.to_dictionary())
     print("Transaction data:", tx.data)
 
-    network_provider = ApiNetworkProvider(API_URL)
-    response = network_provider.send_transaction(tx)
-    print("Response:", response)
+    # network_provider = ApiNetworkProvider(API_URL)
+    # response = network_provider.send_transaction(tx)
+    # print("Response:", response)
