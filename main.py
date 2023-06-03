@@ -85,7 +85,6 @@ def check_price(nonce: int, sc):
     start_time = time.time()
 
     orders = list(map(decode_order, get_orders()))
-    print(len(orders))
 
     if len(orders) == 0:
         print('No orders to execute')
@@ -105,14 +104,14 @@ def check_price(nonce: int, sc):
     elapsed_time = time.time() - start_time
     delay = max(6 - elapsed_time, 0)
 
-    sc.enter(delay, 1, check_price, (orders, nonce, sc,))
+    sc.enter(delay, 1, check_price, (nonce, sc,))
 
 
 def main(cli_args: List[str]):
     # args = parse_arguments(cli_args)
 
     s = sched.scheduler(time.time, time.sleep)
-    s.enter(0, 1, check_price, (364, s,))
+    s.enter(0, 1, check_price, (371, s,))
     s.run()
 
 

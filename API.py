@@ -30,7 +30,7 @@ def open_order():
         call_arguments=[USDC_IDENTIFIER, LIMIT, MIN_VALUE],
         gas_limit=10000000,
         esdt_transfers=transfers,
-        nonce=361
+        nonce=370
     )
 
     build_and_sign_order(builder)
@@ -71,8 +71,8 @@ def build_and_sign_order(builder: ContractCallBuilder):
     tx.signature = signer.sign(tx)
 
     print("Transaction:", tx.to_dictionary())
-    print("Transaction data:", tx.data)
+    # print("Transaction data:", tx.data)
 
-    # network_provider = ApiNetworkProvider(API_URL)
-    # response = network_provider.send_transaction(tx)
-    # print("Response:", response)
+    network_provider = ApiNetworkProvider(API_URL)
+    response = network_provider.send_transaction(tx)
+    print("Response:", response)
