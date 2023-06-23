@@ -43,7 +43,7 @@ def execute_order(index: int, amount_out_min: int, nonce: int):
         function_name="executeOrder",
         caller=owner,
         call_arguments=[index, pool_address, amount_out_min],
-        gas_limit=600000000,
+        gas_limit=2000000,
         nonce=nonce
     )
 
