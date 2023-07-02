@@ -43,7 +43,7 @@ def execute_order(index: int, amount_out_min: int, nonce: int):
         function_name="executeOrder",
         caller=owner,
         call_arguments=[index, pool_address, amount_out_min],
-        gas_limit=2000000,
+        gas_limit=40000000,
         nonce=nonce
     )
 
@@ -58,6 +58,20 @@ def direct_swap(order1_index: int, order2_index: int, nonce: int):
         caller=owner,
         call_arguments=[order1_index, order2_index],
         gas_limit=600000000,
+        nonce=nonce
+    )
+
+    build_and_sign_order(builder)
+
+
+def clear_entry(index: int, nonce: int):
+    builder = ContractCallBuilder(
+        config,
+        contract=contract,
+        function_name="clearEntry",
+        caller=owner,
+        call_arguments=[index],
+        gas_limit=40000000,
         nonce=nonce
     )
 

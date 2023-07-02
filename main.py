@@ -4,15 +4,18 @@ import time
 from argparse import ArgumentParser
 from typing import List
 
-from API import execute_order, get_orders, get_orders_count, direct_swap, open_order
+from API import execute_order, get_orders, get_orders_count, direct_swap, clear_entry
 from utils import *
 
 # Global variables
-nonce = 643
+nonce = 2082
+NO_OF_TRIES = 20
+last_delay = 0
 bot_orders = []
-prices: dict[str:float] = {}  # {token_out: price}
-pending_orders: dict[int:(int, int)] = {}  # {bot_order_index: (sc_order_id, no_tries)}
-orderbook: dict[float: dict[str: (int, int)]] = {}  # {price: {token_out: (bot_order_index, sc_order_id)}}
+prices = {}  # {token_out: price}
+pending_orders = {}  # {bot_order_index: (sc_order_id, no_tries)}
+orderbook = {}  # {price: {token_out: (bot_order_index, sc_order_id)}}
+executed_orders = []  # [sc_order_id]
 
 s = sched.scheduler(time.time, time.sleep)
 
@@ -74,91 +77,185 @@ def request_prices():
         prices[token["id"]] = round(token["price"], 4)
 
 
-def check_fill_against_orderbook(orders: [Order]):
-    global nonce
-
-    for order in orders:
-        new_order = decode_order(order)
-        amount_out = new_order.amount_in * new_order.limit
-
-        if amount_out in orderbook:
-            no_bot_orders = len(bot_orders)
-            for token_out in orderbook[amount_out]:
-                if token_out != new_order.token_out:
-                    bot_order_index, sc_order_id = orderbook[amount_out][token_out]
-
-                    direct_swap(bot_order_index, no_bot_orders, nonce)
-                    nonce += 1
-
-                    pending_orders[bot_order_index] = (sc_order_id, 0)
-                    bot_orders[bot_order_index] = None
-                    bot_orders.append(new_order)
-
-                    del orderbook[amount_out][token_out]
-                    break
-
-            if no_bot_orders == len(bot_orders):
-                orderbook[amount_out][new_order.token_out] = (no_bot_orders, new_order.idx)
-        else:
-            orderbook[amount_out] = {new_order.token_out: (len(bot_orders), new_order.idx)}
-            bot_orders.append(new_order)
-
+# def check_fill_against_orderbook(orders: list):
+#     global nonce
+#
+#     for order in orders:
+#         new_order = decode_order(order)
+#         amount_out = new_order.amount_in * new_order.limit
+#
+#         if amount_out in orderbook:
+#             no_bot_orders = len(bot_orders)
+#             for token_out in orderbook[amount_out]:
+#                 if token_out != new_order.token_out:
+#                     bot_order_index, sc_order_id = orderbook[amount_out][token_out]
+#
+#                     direct_swap(bot_order_index, no_bot_orders, nonce)
+#                     nonce += 1
+#
+#                     pending_orders[bot_order_index] = (sc_order_id, 0)
+#                     bot_orders[bot_order_index] = None
+#                     bot_orders.append(new_order)
+#
+#                     del orderbook[amount_out][token_out]
+#                     break
+#
+#             if no_bot_orders == len(bot_orders):
+#                 orderbook[amount_out][new_order.token_out] = (no_bot_orders, new_order.idx)
+#         else:
+#             orderbook[amount_out] = {new_order.token_out: (len(bot_orders), new_order.idx)}
+#             bot_orders.append(new_order)
 
 def update_orders():
-    global bot_orders
+    global bot_orders, nonce
 
-    no_bot_orders = len(bot_orders)
-
-    if no_bot_orders == 0:
-        if get_orders_count() > 0:
-            check_fill_against_orderbook(get_orders())
-
-        return
+    new_bot_orders = []
+    for order in bot_orders:
+        if order is not None:
+            new_bot_orders.append(order.idx)
+        else:
+            new_bot_orders.append(None)
+    print(f'BOT at start: {new_bot_orders}')
 
     if pending_orders:
-        sc_orders = get_orders()
-        no_sc_orders = len(sc_orders)
+        no_sc_orders = get_orders_count()
 
         if not no_sc_orders:
             pending_orders.clear()
             bot_orders.clear()
             return
 
-        for pending_order_index in list(pending_orders):
-            if pending_order_index > no_sc_orders:
-                pending_orders.clear()
-                bot_orders = bot_orders[:sc_orders]
-                break
+        sc_orders = get_orders()
+        contract_orders = [decode_order(order).idx for order in sc_orders]
+        print(f'CONTRACT: {contract_orders}')
+        pending_order_indexes = list(pending_orders)
+
+        for pending_order_index in pending_order_indexes:
+            if pending_order_index >= no_sc_orders:
+                print(f'{pending_order_index} >= {no_sc_orders}')
+                rev_idx = -1
+                print(f'pending_order_indexes: {pending_order_indexes}')
+                while pending_order_indexes[rev_idx] != pending_order_index:
+                    del pending_orders[pending_order_indexes[rev_idx]]
+                    rev_idx -= 1
+
+                del pending_orders[pending_order_index]
+                bot_orders = bot_orders[:no_sc_orders]
+
+                print(f'pending_orders: {pending_orders}')
+                print(f'executed_orders: {executed_orders}')
+
+                new_bot_orders = []
+                for order in bot_orders:
+                    if order is not None:
+                        new_bot_orders.append(order.idx)
+                    else:
+                        new_bot_orders.append(None)
+                print(f'BOT at middle: {new_bot_orders}')
+
+                return
 
             pending_sc_order_id, no_tries = pending_orders[pending_order_index]
-
-            # There are different orders at the same position in the list compared to those in the contract
-            if int.from_bytes(sc_orders[pending_order_index][:8], byteorder='big') != pending_sc_order_id:
-                # Delete from orderbook
-                amount_out = bot_orders[pending_order_index].amount_in * bot_orders[pending_order_index].limit
-                del orderbook[amount_out][bot_orders[pending_order_index].token_out]
-
-                bot_orders[pending_order_index] = decode_order(sc_orders[pending_order_index])
-                del pending_orders[pending_order_index]
-                bot_orders.pop()
+            sc_order_id = int.from_bytes(sc_orders[pending_order_index][:8], byteorder='big')
+            if sc_order_id != pending_sc_order_id:
+                if sc_order_id not in executed_orders:
+                    bot_orders[pending_order_index] = decode_order(sc_orders[pending_order_index])
+                    del pending_orders[pending_order_index]
+                else:
+                    clear_entry(pending_order_index + 1, nonce)
+                    nonce += 1
             else:
                 no_tries += 1
 
-                if no_tries == 10:
+                if no_tries == NO_OF_TRIES:
                     bot_orders[pending_order_index] = decode_order(sc_orders[pending_order_index])
                     del pending_orders[pending_order_index]
                 else:
                     pending_orders[pending_order_index] = (pending_sc_order_id, no_tries)
 
-        if no_sc_orders > len(bot_orders):
-            check_fill_against_orderbook(sc_orders[no_bot_orders:])
+        bot_orders = bot_orders[:pending_order_indexes[-1] + 1]
 
-        return
+    no_bot_orders = len(bot_orders)
+    if get_orders_count() > no_bot_orders:
+        bot_orders += [decode_order(order) for order in get_orders()[no_bot_orders:]]
 
-    # If I didn't execute any orders in the previous iteration, I check for any newly added orders.
-    no_sc_orders = get_orders_count()
-    if no_sc_orders > no_bot_orders:
-        check_fill_against_orderbook(get_orders()[no_bot_orders:])
+    new_bot_orders = []
+    for order in bot_orders:
+        if order is not None:
+            new_bot_orders.append(order.idx)
+        else:
+            new_bot_orders.append(None)
+    print(f'BOT at end: {new_bot_orders}')
+
+
+# def update_orders():
+#     global bot_orders
+#
+#     no_bot_orders = len(bot_orders)
+#     no_sc_orders = get_orders_count()
+#
+#     sc_orders = None
+
+# if pending_orders:
+#     if not no_sc_orders:
+#         pending_orders.clear()
+#         bot_orders.clear()
+#         return
+#
+#     sc_orders = sc_orders or get_orders()
+#
+#     if no_sc_orders > no_bot_orders:
+#         for pending_order_index in list(pending_orders):
+#
+#             pending_sc_order_id, no_tries = pending_orders[pending_order_index]
+#
+#             # print(f'no_bot_orders: {no_bot_orders}, no_sc_orders: {no_sc_orders}, pending_order_index: {pending_order_index}, pending_sc_order_id: {pending_sc_order_id}')
+#             if int.from_bytes(sc_orders[pending_order_index][:8], byteorder='big') != pending_sc_order_id:
+#                 bot_orders[pending_order_index] = decode_order(sc_orders[pending_order_index])
+#                 del pending_orders[pending_order_index]
+#             else:
+#                 no_tries += 1
+#
+#                 if no_tries == NO_OF_TRIES:
+#                     bot_orders[pending_order_index] = decode_order(sc_orders[pending_order_index])
+#                     del pending_orders[pending_order_index]
+#                 else:
+#                     pending_orders[pending_order_index] = (pending_sc_order_id, no_tries)
+#
+#         for i in range(-1, -bot_orders - 1, -1):
+#             if bot_orders[i] == sc_orders[i - (no_sc_orders - no_bot_orders)]:
+#
+#                 # Trim the smaller list and append the remainder of the larger list
+#                 bot_orders = bot_orders[:i]
+#                 bot_orders.extend(sc_orders[i - (no_sc_orders - no_bot_orders):])
+#                 break
+#
+#     for pending_order_index in list(pending_orders):
+#         if pending_order_index >= no_sc_orders:
+#             del pending_orders[pending_order_index]
+#             bot_orders.pop()
+#             continue
+#
+#         pending_sc_order_id, no_tries = pending_orders[pending_order_index]
+#
+#         # print(f'no_bot_orders: {no_bot_orders}, no_sc_orders: {no_sc_orders}, pending_order_index: {pending_order_index}, pending_sc_order_id: {pending_sc_order_id}')
+#         if int.from_bytes(sc_orders[pending_order_index][:8], byteorder='big') != pending_sc_order_id:
+#             bot_orders[pending_order_index] = decode_order(sc_orders[pending_order_index])
+#             del pending_orders[pending_order_index]
+#             # bot_orders.pop()
+#         else:
+#             no_tries += 1
+#
+#             if no_tries == NO_OF_TRIES:
+#                 bot_orders[pending_order_index] = decode_order(sc_orders[pending_order_index])
+#                 del pending_orders[pending_order_index]
+#             else:
+#                 pending_orders[pending_order_index] = (pending_sc_order_id, no_tries)
+
+# if no_sc_orders > no_bot_orders:
+#     # check_fill_against_orderbook(get_orders()[no_bot_orders:])
+#     sc_orders = get_orders()
+#     bot_orders += [decode_order(order) for order in sc_orders[no_bot_orders:]]
 
 
 def check_price():
@@ -170,15 +267,15 @@ def check_price():
         request_prices()
 
         for index, order in enumerate(bot_orders):
-            if order is not None:
-                if prices[order.token_in] >= order.limit:
-                    execute_order(index + 1, int(10 ** 6), nonce)
-                    pending_orders[index] = (order.idx, 0)
-                    nonce += 1
+            if order is not None and prices[order.token_in] >= order.limit:
+                execute_order(index + 1, 100, nonce)
+                pending_orders[index] = (order.idx, 0)
+                executed_orders.append(order.idx)
+                nonce += 1
 
-                    print(f'Order {index + 1} executed')
+                print(f'Order {order.idx} executed')
 
-                    bot_orders[index] = None
+                bot_orders[index] = None
     else:
         print('No orders to execute')
 
@@ -193,30 +290,36 @@ def check_price():
 
 
 def main(cli_args: List[str]):
+    global bot_orders
+
     # args = parse_arguments(cli_args)
     if get_orders_count() > 0:
-        check_fill_against_orderbook(get_orders())
+        # check_fill_against_orderbook(get_orders())
+        bot_orders = [decode_order(order) for order in get_orders()]
 
     s.enter(0, 1, check_price, ())
     s.run()
 
 
 if __name__ == '__main__':
-    main(sys.argv[1:])
+    # main(sys.argv[1:])
 
-    # value = EGLD_VALUE
-    # limit = int('{:.0f}'.format(value * 10 ** 18))
+    bot_orders = [decode_order(order) for order in get_orders()]
+    new_bot_orders = []
+    for order in bot_orders:
+        if order is not None:
+            new_bot_orders.append(order.idx)
+        else:
+            new_bot_orders.append(None)
+    new_bot_orders.sort()
+    print(new_bot_orders)
+
+    # price = 27.512
+    # count = 0
+    # bot_orders = [decode_order(order) for order in get_orders()]
+    # for index, order in enumerate(bot_orders):
+    #     if price >= order.limit:
+    #         count += 1
+    #         print(index, order.idx, order.limit)
     #
-    # for i in range(2):
-    #     open_order(nonce, limit)
-    #     nonce += 1
-    #     value += 0.0001
-    #     limit = int('{:.0f}'.format(value * 10 ** 18))
-    #
-    # value = 27.2377
-    # limit = int('{:.0f}'.format(value * 10 ** 18))
-    # for i in range(5):
-    #     open_order(nonce, limit)
-    #     nonce += 1
-    #     value += 0.0001
-    #     limit = int('{:.0f}'.format(value * 10 ** 18))
+    # print(count)
