@@ -17,6 +17,30 @@ LIMIT = int('{:.0f}'.format(EGLD_VALUE * 10 ** 18))
 MIN_VALUE = int(EGLD_AMOUNT * EGLD_VALUE * 0.9 * 10 ** 6)
 
 
+def binary_search(arr, x) -> bool:
+    low = 0
+    high = len(arr) - 1
+
+    while low <= high:
+
+        mid = (high + low) // 2
+
+        # If x is greater, ignore left half
+        if arr[mid] < x:
+            low = mid + 1
+
+        # If x is smaller, ignore right half
+        elif arr[mid] > x:
+            high = mid - 1
+
+        # means x is present at mid
+        else:
+            return True
+
+    # If we reach here, then the element was not present
+    return False
+
+
 class Order:
     def __init__(self, idx, token_in, amount_in, token_out, limit):
         self.idx = idx

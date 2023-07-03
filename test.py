@@ -17,11 +17,11 @@ owner: Address = Address.from_bech32("erd10u02xc9r8kvjrhr922mge0kv53flczzxr2hj62
 config = DefaultTransactionBuildersConfiguration(chain_id="D")
 signer = UserSigner.from_pem_file(Path("wallet-test.pem"))
 
-NUMBER_OF_ORDERS = 50
-SLEEP_TIME = 30
+NUMBER_OF_ORDERS = 2
+SLEEP_TIME = 5
 AMOUNT_IN = 0.01
 
-nonce = 1956
+nonce = 2176
 rounds = 1
 price = 0
 s = sched.scheduler(time.time, time.sleep)
